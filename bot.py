@@ -1,7 +1,7 @@
 import requests
 import time
 import random
-import websocket as ws  # Changed to websocket-client
+import websocket as ws  # Using websocket-client
 import json
 import pytz
 from datetime import datetime
@@ -42,7 +42,6 @@ class BrokexBot:
         self.SUPABASE_URL = "https://yaikidiqvtxiqtrawvgf.supabase.co"
         self.SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhaWtpZGlxdnR4aXF0cmF3dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM3MDI3MzcsImV4cCI6MjA1OTI3ODczN30.z2gZvFpA5HMIODCpjXJFNX0amE3V5MqAgJSrIr7jS1Y"
         self.STALE_ORDER_DEVIATION_PCT = 15
-        # NEW: Position loop configuration
         self.POSITION_LOOP_COUNT = 50  # Number of positions to open per wallet
         self.nonce_cache = {}
         self.asset_data = {}
@@ -112,7 +111,11 @@ class BrokexBot:
     def update_asset_data_from_websocket(self):
         log_print(f"{Fore.CYAN}🔄 Connecting to WebSocket to update asset data...{Style.RESET_ALL}")
         try:
-            ws = ws.create_connection(self.WEBSOCKET_URL, timeout=15)  # Updated to use ws alias
+            try:
+                ws = ws.create_connection(self.WEBSOCKET_URL, timeout=30)  # Increased timeout
+            except Exception as conn_error:
+                raise Exception(f"Failed to establish WebSocket connection: {conn_error}")
+            
             message = ws.recv()
             ws.close()
             payload = json.loads(message)
@@ -472,12 +475,8 @@ class BrokexBot:
         except Exception as e:
             log_print(f"{Fore.RED}❌ Error while checking competition rank: {e}{Style.RESET_ALL}")
 
-    # NEW: Enhanced position opening loop
     @with_retry(max_retries=3, base_delay=2)
     def execute_position_opening_loop(self, web3):
-        """
-        Execute the 50x position opening loop for the current wallet
-        """
         log_print(f"{Fore.MAGENTA}🚀 Starting 50x Position Opening Loop...{Style.RESET_ALL}")
         
         successful_positions = 0
@@ -486,7 +485,6 @@ class BrokexBot:
         for i in range(1, self.POSITION_LOOP_COUNT + 1):
             log_print(f"{Fore.CYAN}--- Position {i}/{self.POSITION_LOOP_COUNT} ---{Style.RESET_ALL}")
             
-            # Check balance before each position
             balance = self.get_usdt_balance(web3)
             if balance < self.MIN_USDT_BALANCE:
                 log_print(f"{Fore.YELLOW}⚠️ USDT balance ({balance:.2f}) insufficient. Attempting to claim...{Style.RESET_ALL}")
@@ -499,7 +497,6 @@ class BrokexBot:
                     log_print(f"{Fore.RED}❌ Failed to claim USDT. Stopping position loop.{Style.RESET_ALL}")
                     break
             
-            # Attempt to open market position
             try:
                 if self.open_market_position(web3):
                     successful_positions += 1
@@ -508,7 +505,6 @@ class BrokexBot:
                     failed_positions += 1
                     log_print(f"{Fore.RED}❌ Position {i} failed! ({failed_positions}/{i} failed){Style.RESET_ALL}")
                 
-                # Check and manage positions every 10 positions
                 if i % 10 == 0:
                     log_print(f"{Fore.CYAN}🔄 Checkpoint {i}: Checking existing positions...{Style.RESET_ALL}")
                     self.check_and_manage_open_positions(web3)
@@ -518,13 +514,11 @@ class BrokexBot:
                 failed_positions += 1
                 log_print(f"{Fore.RED}❌ Error opening position {i}: {e}{Style.RESET_ALL}")
             
-            # Delay between positions (shorter for efficiency)
             if i < self.POSITION_LOOP_COUNT:
                 delay = random.randint(8, 15)
                 log_print(f"{Fore.YELLOW}⏳ {delay}s delay before next position...{Style.RESET_ALL}")
                 time.sleep(delay)
         
-        # Final summary
         total_attempts = successful_positions + failed_positions
         success_rate = (successful_positions / total_attempts * 100) if total_attempts > 0 else 0
         
@@ -554,7 +548,6 @@ class BrokexBot:
 
     def run(self):
         while True:
-            
             self.clear_terminal()
             self.display_banner()
             w3 = None
@@ -604,7 +597,7 @@ class BrokexBot:
                         if not self.claim_usdt(w3):
                             log_print(f"{Fore.RED}❌ Failed to claim USDT. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
                             continue
-                        balance = self.get_usdt_balance(web3)
+                        balance = self.get_usdt_balance(w3)
                         log_print(f"{Fore.YELLOW}💰 USDT balance after claim: {balance:.4f}{Style.RESET_ALL}")
                         if balance < self.MIN_USDT_BALANCE:
                             log_print(f"{Fore.RED}❌ Balance still insufficient after claim. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
@@ -617,12 +610,10 @@ class BrokexBot:
                     time.sleep(5)
                     self.check_my_liquidity(w3)
 
-                    # NEW: Execute the main 50x position opening loop
                     log_print(f"{Fore.CYAN}▶️ Starting main position opening sequence...{Style.RESET_ALL}")
                     if not self.execute_position_opening_loop(w3):
                         log_print(f"{Fore.YELLOW}⚠️ Position opening loop completed with issues.{Style.RESET_ALL}")
 
-                    # Additional actions after position loop
                     log_print(f"{Fore.CYAN}▶️ Executing additional ecosystem actions...{Style.RESET_ALL}")
                     additional_actions = [
                         ("Place Limit Order", self.place_limit_order),
@@ -646,7 +637,6 @@ class BrokexBot:
                             log_print(f"{Fore.YELLOW}⏳ {delay} second delay...{Style.RESET_ALL}")
                             time.sleep(delay)
 
-                    # Final position and order management
                     log_print(f"{Fore.CYAN}▶️ Final cleanup and management...{Style.RESET_ALL}")
                     self.check_and_manage_open_positions(w3)
                     time.sleep(5)
