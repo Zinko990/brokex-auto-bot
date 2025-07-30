@@ -1,7 +1,7 @@
 import requests
 import time
 import random
-import websocket
+import websocket as ws  # Changed to websocket-client
 import json
 import pytz
 from datetime import datetime
@@ -112,7 +112,7 @@ class BrokexBot:
     def update_asset_data_from_websocket(self):
         log_print(f"{Fore.CYAN}🔄 Connecting to WebSocket to update asset data...{Style.RESET_ALL}")
         try:
-            ws = websocket.create_connection(self.WEBSOCKET_URL, timeout=15)
+            ws = ws.create_connection(self.WEBSOCKET_URL, timeout=15)  # Updated to use ws alias
             message = ws.recv()
             ws.close()
             payload = json.loads(message)
