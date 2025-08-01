@@ -228,7 +228,7 @@ class BrokexBot:
         asset_index_str = random.choice(list(self.asset_data.keys()))
         asset_info = self.asset_data[asset_index_str]
         asset_name, current_price = asset_info["name"], asset_info["price"]
-        usd_size_float = round(random.uniform(10.1, 20.5), 2)
+        usd_size_float = 11.0  # Fixed to 11 USDT
         if self.get_usdt_balance(web3) < usd_size_float:
             log_print(f"{Fore.YELLOW}⚠️ Insufficient USDT balance for limit order.{Style.RESET_ALL}")
             return False
@@ -240,8 +240,8 @@ class BrokexBot:
         tp_price = int(target_price * (1.05 if is_long else 0.95))
         log_print(f"{Fore.CYAN}⌛ Placing Limit Order: {asset_name.upper()} | {'LONG' if is_long else 'SHORT'}, Size={usd_size_float:.2f} USDT, Lev={leverage}x, Target=${target_price_float:.4f}{Style.RESET_ALL}")
         if self.get_usdt_balance(web3) < usd_size_float:
-             log_print(f"{Fore.YELLOW}⚠️ Insufficient USDT balance for limit order.{Style.RESET_ALL}")
-             return False
+            log_print(f"{Fore.YELLOW}⚠️ Insufficient USDT balance for limit order.{Style.RESET_ALL}")
+            return False
         usdt_contract = web3.eth.contract(address=self.USDT_ADDRESS, abi=self.USDT_ABI)
         allowance = usdt_contract.functions.allowance(self.wallet_address, self.BROKEX_ADDRESS).call()
         if allowance < usd_size_float * 10**self.USDT_DECIMALS:
@@ -271,7 +271,7 @@ class BrokexBot:
         asset_index_str = random.choice(list(self.asset_data.keys()))
         asset_info = self.asset_data[asset_index_str]
         asset_name, current_price = asset_info["name"], asset_info["price"]
-        usd_size_float = round(random.uniform(10.1, 20.5), 2)
+        usd_size_float = 11.0  # Fixed to 11 USDT
         if self.get_usdt_balance(web3) < usd_size_float:
             log_print(f"{Fore.YELLOW}⚠️ Insufficient USDT balance for market order.{Style.RESET_ALL}")
             return False
@@ -494,121 +494,110 @@ class BrokexBot:
         return account.address
 
     def run(self):
-        while True:
-            self.clear_terminal()
-            self.display_banner()
-            w3 = None
-            for attempt in range(1, self.MAX_RETRIES + 1):
-                try:
-                    w3 = self.connect_web3()
-                    log_print(f"{Fore.GREEN}✅ Connected to chain ID: {self.CHAIN_ID}{Style.RESET_ALL}")
-                    break
-                except Exception as e:
-                    log_print(f"{Fore.RED}❌ Failed to connect to RPC on attempt {attempt}/{self.MAX_RETRIES}: {e}{Style.RESET_ALL}")
-                    if attempt < self.MAX_RETRIES:
-                        delay = self.RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                        log_print(f"{Fore.YELLOW}🔄 Retrying in {delay} seconds...{Style.RESET_ALL}")
-                        time.sleep(delay)
-                    else:
-                        log_print(f"{Fore.RED}❌ Max retries reached. Aborting run.{Style.RESET_ALL}")
-                        return
-
-            private_keys = self.read_private_keys()
-            if not private_keys:
-                log_print(f"{Fore.YELLOW}Program will stop as no private keys are available for processing.{Style.RESET_ALL}")
+        self.clear_terminal()
+        self.display_banner()
+        w3 = None
+        for attempt in range(1, self.MAX_RETRIES + 1):
+            try:
+                w3 = self.connect_web3()
+                log_print(f"{Fore.GREEN}✅ Connected to chain ID: {self.CHAIN_ID}{Style.RESET_ALL}")
                 break
+            except Exception as e:
+                log_print(f"{Fore.RED}❌ Failed to connect to RPC on attempt {attempt}/{self.MAX_RETRIES}: {e}{Style.RESET_ALL}")
+                if attempt < self.MAX_RETRIES:
+                    delay = self.RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                    log_print(f"{Fore.YELLOW}🔄 Retrying in {delay} seconds...{Style.RESET_ALL}")
+                    time.sleep(delay)
+                else:
+                    log_print(f"{Fore.RED}❌ Max retries reached. Aborting run.{Style.RESET_ALL}")
+                    return
 
-            for index, pk in enumerate(private_keys):
-                log_print(f"{Fore.MAGENTA}======================================================{Style.RESET_ALL}")
-                log_print(f"{Fore.MAGENTA}🚀 Starting process for Account {index + 1}/{len(private_keys)}{Style.RESET_ALL}")
-                log_print(f"{Fore.MAGENTA}======================================================{Style.RESET_ALL}")
+        private_keys = self.read_private_keys()
+        if not private_keys:
+            log_print(f"{Fore.YELLOW}Program will stop as no private keys are available for processing.{Style.RESET_ALL}")
+            return
 
-                try:
-                    self.wallet_address = self.get_address_from_pk(pk)
-                    self.private_key = pk
-                    self.account = Account.from_key(pk)
-                    log_print(f"{Fore.WHITE}═╣ Processing Wallet: {self.wallet_address} ╠═{Style.RESET_ALL}")
+        for index, pk in enumerate(private_keys):
+            log_print(f"{Fore.MAGENTA}======================================================{Style.RESET_ALL}")
+            log_print(f"{Fore.MAGENTA}🚀 Starting process for Account {index + 1}/{len(private_keys)}{Style.RESET_ALL}")
+            log_print(f"{Fore.MAGENTA}======================================================{Style.RESET_ALL}")
 
-                    if not self.update_asset_data_from_websocket():
-                        log_print(f"{Fore.RED}❌ Failed to fetch asset data. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
+            try:
+                self.wallet_address = self.get_address_from_pk(pk)
+                self.private_key = pk
+                self.account = Account.from_key(pk)
+                log_print(f"{Fore.WHITE}═╣ Processing Wallet: {self.wallet_address} ╠═{Style.RESET_ALL}")
+
+                if not self.update_asset_data_from_websocket():
+                    log_print(f"{Fore.RED}❌ Failed to fetch asset data. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
+                    continue
+
+                if self.check_and_join_competition(w3):
+                    self.check_competition_rank()
+
+                balance = self.get_usdt_balance(w3)
+                log_print(f"{Fore.YELLOW}💰 USDT Balance: {balance:.4f}{Style.RESET_ALL}")
+
+                if balance < self.MIN_USDT_BALANCE:
+                    log_print(f"{Fore.YELLOW}⚠️ USDT balance ({balance:.2f}) is insufficient. Attempting to claim...{Style.RESET_ALL}")
+                    if not self.claim_usdt(w3):
+                        log_print(f"{Fore.RED}❌ Failed to claim USDT. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
+                        continue
+                    balance = self.get_usdt_balance(w3)
+                    log_print(f"{Fore.YELLOW}💰 USDT Balance after claim: {balance:.4f}{Style.RESET_ALL}")
+                    if balance < self.MIN_USDT_BALANCE:
+                        log_print(f"{Fore.RED}❌ Balance still insufficient after claim. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
                         continue
 
-                    if self.check_and_join_competition(w3):
-                        self.check_competition_rank()
+                log_print(f"{Fore.CYAN}▶️ Starting initial checks...{Style.RESET_ALL}")
+                self.check_and_manage_open_positions(w3)
+                time.sleep(5)
+                self.check_and_cancel_stale_orders(w3)
+                time.sleep(5)
+                self.check_my_liquidity(w3)
 
-                    balance = self.get_usdt_balance(w3)
-                    log_print(f"{Fore.YELLOW}💰 USDT Balance: {balance:.4f}{Style.RESET_ALL}")
+                log_print(f"{Fore.CYAN}▶️ Starting main action sequence for 100 orders...{Style.RESET_ALL}")
+                total_orders = 100
+                actions = [("Open Market Position", self.open_market_position)] * 50 + [("Place Limit Order", self.place_limit_order)] * 50
+                random.shuffle(actions)
 
-                    if balance < self.MIN_USDT_BALANCE:
-                        log_print(f"{Fore.YELLOW}⚠️ USDT balance ({balance:.2f}) is insufficient. Attempting to claim...{Style.RESET_ALL}")
-                        if not self.claim_usdt(w3):
-                            log_print(f"{Fore.RED}❌ Failed to claim USDT. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
-                            continue
-                        balance = self.get_usdt_balance(w3)
-                        log_print(f"{Fore.YELLOW}💰 USDT Balance after claim: {balance:.4f}{Style.RESET_ALL}")
-                        if balance < self.MIN_USDT_BALANCE:
-                            log_print(f"{Fore.RED}❌ Balance still insufficient after claim. Skipping Brokex Ecosystem.{Style.RESET_ALL}")
-                            continue
+                for i, (name, func) in enumerate(actions, 1):
+                    log_print(f"{Fore.CYAN}--- Action {i}/{total_orders}: {name} ---{Style.RESET_ALL}")
+                    try:
+                        if not func(w3):
+                            log_print(f"{Fore.YELLOW}⚠️ Action '{name}' was unsuccessful, proceeding to next action.{Style.RESET_ALL}")
+                    except Exception as e:
+                        log_print(f"{Fore.RED}⚠️ Error during action {name}: {e}{Style.RESET_ALL}")
+                    if i < total_orders:
+                        delay = random.randint(15, 25)
+                        log_print(f"{Fore.YELLOW}⏳ Pausing for {delay} seconds...{Style.RESET_ALL}")
+                        time.sleep(delay)
 
-                    log_print(f"{Fore.CYAN}▶️ Starting initial checks...{Style.RESET_ALL}")
-                    self.check_and_manage_open_positions(w3)
-                    time.sleep(5)
-                    self.check_and_cancel_stale_orders(w3)
-                    time.sleep(5)
-                    self.check_my_liquidity(w3)
+                log_print(f"{Fore.GREEN}✅ Completed processing {total_orders} orders for this wallet.{Style.RESET_ALL}")
 
-                    log_print(f"{Fore.CYAN}▶️ Starting main action sequence...{Style.RESET_ALL}")
-                    core_actions = [
-                        ("Open Market Position", self.open_market_position),
-                        ("Place Limit Order", self.place_limit_order),
-                        ("Open Market Position", self.open_market_position),
-                        ("Place Limit Order", self.place_limit_order),
-                        ("Open Market Position", self.open_market_position),
-                        ("Place Limit Order", self.place_limit_order),
-                        ("Open Market Position", self.open_market_position),
-                        ("Place Limit Order", self.place_limit_order),
-                        ("Open Market Position", self.open_market_position),
-                        ("Place Limit Order", self.place_limit_order),
-                        ("Add Liquidity", self.add_liquidity)
-                    ]
-                    random.shuffle(core_actions)
-                    actions = core_actions + [("Withdraw Liquidity", self.withdraw_liquidity)]
+                # Process liquidity actions
+                log_print(f"{Fore.CYAN}▶️ Processing liquidity actions...{Style.RESET_ALL}")
+                self.add_liquidity(w3)
+                time.sleep(5)
+                if self.check_my_liquidity(w3) > 0:
+                    self.withdraw_liquidity(w3)
 
-                    for i, (name, func) in enumerate(actions, 1):
-                        log_print(f"{Fore.CYAN}--- Action {i}/{len(actions)}: {name} ---{Style.RESET_ALL}")
-                        if func.__name__ == 'withdraw_liquidity':
-                            if self.check_my_liquidity(w3) == 0:
-                                log_print(f"{Fore.YELLOW}ℹ️ No liquidity available to withdraw, skipping action.{Style.RESET_ALL}")
-                                continue
-                        try:
-                            if not func(w3):
-                                log_print(f"{Fore.YELLOW}⚠️ Action '{name}' was unsuccessful, proceeding to next action.{Style.RESET_ALL}")
-                        except Exception as e:
-                            log_print(f"{Fore.RED}⚠️ Error during action {name}: {e}{Style.RESET_ALL}")
-                        if i < len(actions):
-                            delay = random.randint(15, 25)
-                            log_print(f"{Fore.YELLOW}⏳ Pausing for {delay} seconds...{Style.RESET_ALL}")
-                            time.sleep(delay)
+                log_print(f"{Fore.GREEN}✅ Completed processing Brokex Ecosystem for this wallet.\n{Style.RESET_ALL}")
 
-                    log_print(f"{Fore.GREEN}✅ Completed processing Brokex Ecosystem for this wallet.\n{Style.RESET_ALL}")
+            except Exception as e:
+                log_print(f"{Fore.RED}❌ Fatal error occurred for Account {index + 1}: {e}{Style.RESET_ALL}")
+                log_print(f"{Fore.YELLOW}Proceeding to next account...{Style.RESET_ALL}")
 
-                except Exception as e:
-                    log_print(f"{Fore.RED}❌ Fatal error occurred for Account {index + 1}: {e}{Style.RESET_ALL}")
-                    log_print(f"{Fore.YELLOW}Proceeding to next account...{Style.RESET_ALL}")
+            if index < len(private_keys) - 1:
+                inter_account_delay = random.randint(30, 60)
+                log_print(f"{Fore.BLUE}--- Pausing for {inter_account_delay} seconds before switching to next account ---{Style.RESET_ALL}")
+                time.sleep(inter_account_delay)
 
-                if index < len(private_keys) - 1:
-                    inter_account_delay = random.randint(30, 60)
-                    log_print(f"{Fore.BLUE}--- Pausing for {inter_account_delay} seconds before switching to next account ---{Style.RESET_ALL}")
-                    time.sleep(inter_account_delay)
-
-            w3 = None  
-
-            log_print(f"{Fore.CYAN}======================================================{Style.RESET_ALL}")
-            log_print(f"{Fore.CYAN}✅ All accounts have been processed.{Style.RESET_ALL}")
-            log_print(f"{Fore.CYAN}⏰ Sleeping for 24 hours before restarting...{Style.RESET_ALL}")
-            log_print(f"{Fore.CYAN}======================================================{Style.RESET_ALL}")
-            time.sleep(24 * 60 * 60)
+        log_print(f"{Fore.CYAN}======================================================{Style.RESET_ALL}")
+        log_print(f"{Fore.CYAN}✅ All accounts have been processed.{Style.RESET_ALL}")
+        log_print(f"{Fore.CYAN}🏁 Program completed after processing 100 orders.{Style.RESET_ALL}")
+        log_print(f"{Fore.CYAN}======================================================{Style.RESET_ALL}")
 
 if __name__ == "__main__":
-    bot = BrokexBot()  
+    bot = BrokexBot()
     bot.run()
